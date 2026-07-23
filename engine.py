@@ -64,6 +64,10 @@ def generate_ranking():
     return ranking
 
 
+if __name__ == "__main__":
+    ranking = generate_ranking()
+    print(ranking)
+
 
         
 

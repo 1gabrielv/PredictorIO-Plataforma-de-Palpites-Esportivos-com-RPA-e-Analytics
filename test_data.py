@@ -7,20 +7,22 @@ def insert_test_data():
     db.register_user("Jane Smith", "janesmith", "password456")
     db.register_user("Bob Johnson", "bobjohnson", "password789")
 
+    db.add_match("Brazil", "Argentina", "2026-07-20 16:00")  
+    db.add_match("France", "Germany", "2026-07-21 16:00")    
+    db.add_match("Japan", "Senegal", "2026-07-22 12:00")     
 
-    db.add_match("Brazil", "Argentina", "2026-07-20 16:00")
-    db.add_match("France", "Germany", "2026-07-21 16:00")
-    db.add_match("Japan", "Senegal", "2026-07-22 12:00")
+    db.update_match_result(match_id=1, home_goals=3, away_goals=1)
+    db.update_match_result(match_id=2, home_goals=2, away_goals=2)
 
-    db.save_prediction(user_id=1, match_id=1, predicted_home_goals=3, predicted_away_goals=1) 
-    db.save_prediction(user_id=2, match_id=1, predicted_home_goals=2, predicted_away_goals=0) 
-    db.save_prediction(user_id=3, match_id=1, predicted_home_goals=1, predicted_away_goals=2) 
 
-    db.save_prediction(user_id=1, match_id=2, predicted_home_goals=2, predicted_away_goals=2)
-    db.save_prediction(user_id=2, match_id=2, predicted_home_goals=1, predicted_away_goals=1)
+    db.save_prediction(user_id=1, match_id=1, predicted_home_goals=3, predicted_away_goals=1) # John cravou (12 pts)
+    db.save_prediction(user_id=2, match_id=1, predicted_home_goals=2, predicted_away_goals=0) # Jane acertou vencedor (5 pts)
+    db.save_prediction(user_id=3, match_id=1, predicted_home_goals=1, predicted_away_goals=2) # Bob errou tudo (0 pts)
 
-    print("Test data inserted successfully!")
+    db.save_prediction(user_id=1, match_id=2, predicted_home_goals=2, predicted_away_goals=2) # John cravou de novo (12 pts)
+    db.save_prediction(user_id=2, match_id=2, predicted_home_goals=1, predicted_away_goals=1) # Jane acertou empate (5 pts)
 
+    print("Test data inserted and matches updated successfully!")
 
 if __name__ == "__main__":
     insert_test_data()

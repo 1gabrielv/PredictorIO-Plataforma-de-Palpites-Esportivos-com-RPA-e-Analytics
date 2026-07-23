@@ -103,5 +103,17 @@ def save_prediction(user_id, match_id, predicted_home_goals, predicted_away_goal
     conn.commit()
     conn.close()
 
+def update_match_result(match_id, home_goals, away_goals):
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE matches
+        SET home_goals = ?, away_goals = ?
+        WHERE id = ?
+                   """,
+        (home_goals, away_goals, match_id))
+    conn.commit()
+    conn.close()
+
 if __name__ == "__main__":
     create_tables()
