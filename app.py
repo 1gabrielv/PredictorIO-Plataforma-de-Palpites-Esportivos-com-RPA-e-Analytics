@@ -1,6 +1,7 @@
 import streamlit as st
 import database as db
 import engine as eng
+import scraper
 
 st.set_page_config(page_title="Bolão Nota 10", page_icon="⚽", layout="centered")
 
@@ -62,20 +63,28 @@ def show_main_dashboard():
     tab_predictions, tab_ranking = st.tabs(["🎯 Submit Predictions", "🏆 Leaderboard"])
 
     with tab_predictions:
-        st.subheader("Upcoming Matches")
+        col_header, col_sync = st.columns([3, 1])
+        with col_header:
+            st.subheader("Upcoming Matches")
+        with col_sync:
+            if st.button("🔄 Sincronizar Jogos FIFA"):
+                with st.spinner("Buscando jogos da FIFA..."):
+                    scraper.run_fifa_scraper()
+                st.success("Jogos atualizados!")
+                st.rerun()
 
         conn = db.connect()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, home_team, away_team, match_date FROM matches")
+        cursor.execute("SELECT id, home_team, away_team, match_date, home_goals, away_goals FROM matches")
         matches = cursor.fetchall()
         conn.close()
 
         if not matches:
-            st.info("No matches available for predictions yet.")
+            st.info("Nenhuma partida encontrada. Clique no botão acima para carregar os jogos da FIFA.")
         else:
-            for match_id, home_team, away_team, match_date in matches:
+            for match_id, home_team, away_team, match_date, actual_home, actual_away in matches:
                 st.markdown(f"### {home_team} vs {away_team}")
-                st.caption(f"📅 Date: {match_date}")
+                st.caption(f"📅 Data: {match_date}")
 
                 conn = db.connect()
                 cursor = conn.cursor()
@@ -92,20 +101,16 @@ def show_main_dashboard():
 
                 col_home, col_vs, col_away, col_btn = st.columns([2, 1, 2, 2])
                 with col_home:
-                    pred_home = st.number_input(
-                        f"{home_team} Goals", min_value=0, value=default_home, key=f"home_{match_id}"
-                    )
+                    pred_home = st.number_input(f"{home_team}", min_value=0, value=default_home, key=f"home_{match_id}")
                 with col_vs:
                     st.write("### x")
                 with col_away:
-                    pred_away = st.number_input(
-                        f"{away_team} Goals", min_value=0, value=default_away, key=f"away_{match_id}"
-                    )
+                    pred_away = st.number_input(f"{away_team}", min_value=0, value=default_away, key=f"away_{match_id}")
                 with col_btn:
-                    st.write(" ")  # Espaçamento vertical
-                    if st.button("Save Prediction", key=f"btn_{match_id}"):
+                    st.write(" ")
+                    if st.button("Salvar Palpite", key=f"btn_{match_id}"):
                         db.save_prediction(user_id, match_id, int(pred_home), int(pred_away))
-                        st.success("Saved!")
+                        st.success("Salvo!")
 
                 st.divider()
 

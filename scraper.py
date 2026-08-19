@@ -1,81 +1,80 @@
 from playwright.sync_api import sync_playwright
 import database as db
 
-with sync_playwright() as p:
-    browser = p.chromium.launch(headless=False) 
-    page = browser.new_page()
+def run_fifa_scraper():
+    db.create_tables()
 
-    print("🌐 Acessando o site da FIFA...")
-    page.goto("https://www.fifa.com/pt/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures?country=BR&wtw-filter=ALL")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(viewport={"width": 1280, "height": 800})
+        page = context.new_page()
 
-    page.wait_for_selector(".ff-pb-24")
+        print("🌐 Conectando à FIFA...")
+        page.goto(
+            "https://www.fifa.com/pt/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures?country=BR&wtw-filter=ALL",
+            wait_until="domcontentloaded",
+            timeout=30000
+        )
+        
+        page.wait_for_selector(".ff-pb-24", timeout=20000)
 
-    page.evaluate("window.scrollBy(0, 800)")
-    
-    page.wait_for_timeout(2000)
+        for _ in range(4):
+            page.mouse.wheel(0, 1200)
+            page.wait_for_timeout(800)
 
-    match_cards = page.locator(".ff-pb-24").all()
+        match_cards = page.locator(".ff-pb-24").all()
+        print(f"🔎 Encontrados {len(match_cards)} blocos na página.")
 
-    print(f"🔎 Encontrados {len(match_cards)} cards de jogos na página.\n")
+        conn = db.connect()
+        cursor = conn.cursor()
+        total_saved = 0
 
-    # print(match_cards)
+        for card in match_cards:
+            title_locator = card.locator(".matches-container_title__ATLsl")
+            if title_locator.count() == 0:
+                continue
 
-    conn = db.connect()
-    cursor = conn.cursor()
+            match_date = title_locator.inner_text().strip()
+            match_rows = card.locator(".match-row_matchRowContainer__NoCRI")
+            count = match_rows.count()
 
-    for i in range(len(match_cards)):
-        title_locator = match_cards[i].locator(".matches-container_title__ATLsl")
-        if title_locator.count() == 0:
-            continue    
+            for j in range(count):
+                row = match_rows.nth(j)
+                teams = row.locator(".d-none.d-md-block").all_inner_texts()
+                goals_raw = row.locator("[class*='match-row_score']").all_inner_texts()
+                goals = [g.strip() for g in goals_raw if g.strip().isdigit()]
 
-        match_date = title_locator.inner_text().strip()
-        match_rows = match_cards[i].locator(".match-row_matchRowContainer__NoCRI")
-        count = match_rows.count()
-        for j in range(count):
-            row = match_rows.nth(j)
-            
-            teams = row.locator(".d-none.d-md-block").all_inner_texts()
-            goals = row.locator(".match-row_score__wfcQP").all_inner_texts()
-            
-            if len(teams) >= 2 and len(goals) >= 2:
-                home_team = teams[0].strip()
-                away_team = teams[1].strip()
+                if len(teams) >= 2:
+                    home_team = teams[0].strip()
+                    away_team = teams[1].strip()
 
-                home_goals = int(goals[0])
-                away_goals = int(goals[1])
+                    cursor.execute("""
+                        SELECT id FROM matches 
+                        WHERE home_team = ? AND away_team = ?
+                    """, (home_team, away_team))
+                    match_record = cursor.fetchone()
 
-                cursor.execute("""
-                    INSERT INTO matches (home_team, away_team, match_date, home_goals, away_goals)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (home_team, away_team, match_date, home_goals, away_goals))
+                    home_goals = int(goals[0]) if len(goals) >= 2 else None
+                    away_goals = int(goals[1]) if len(goals) >= 2 else None
 
+                    if not match_record:
+                        cursor.execute("""
+                            INSERT INTO matches (home_team, away_team, match_date, home_goals, away_goals)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (home_team, away_team, match_date, home_goals, away_goals))
+                        total_saved += 1
+                    else:
+                        match_id = match_record[0]
+                        cursor.execute("""
+                            UPDATE matches 
+                            SET home_goals = ?, away_goals = ?, match_date = ?
+                            WHERE id = ?
+                        """, (home_goals, away_goals, match_date, match_id))
 
-                print(f"🏟️ Jogo {j + 1} ({match_date}): {home_team} vs {away_team} - {home_goals} x {away_goals}") 
-            
-            elif len(teams) >= 2:
-                home_team = teams[0].strip()
-                away_team = teams[1].strip()
+        conn.commit()
+        conn.close()
+        browser.close()
+        print(f"✅ Ingestão finalizada: {total_saved} jogos processados.")
 
-                cursor.execute("""
-                               SELECT id FROM matches 
-                               WHERE home_team = ? AND away_team = ? AND match_date = ? 
-                               """, (home_team, away_team, match_date))
-                match_record = cursor.fetchone()
-
-                print(f"🏟️ Jogo {j + 1} ({match_date}): {home_team} vs {away_team} - Placar ainda não disponível")
-                cursor.execute("""
-                    INSERT INTO matches (home_team, away_team, match_date, home_goals, away_goals)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (home_team, away_team, match_date, None, None))
-
-
-    # for i, card in enumerate(match_cards, start=1):
-    #     txt = card.inner_text().strip()
-    #     if txt:
-    #         print(f"--- CARD {i} ---")
-    #         print(txt)
-    #         print("----------------\n")
-
-    conn.commit()
-    conn.close()
-    browser.close()
+if __name__ == "__main__":
+    run_fifa_scraper()
