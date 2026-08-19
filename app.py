@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 import database as db
 import engine as eng
 import scraper
@@ -62,6 +63,7 @@ def show_main_dashboard():
 
     tab_predictions, tab_ranking = st.tabs(["🎯 Submit Predictions", "🏆 Leaderboard"])
 
+
     with tab_predictions:
         col_header, col_sync = st.columns([3, 1])
         with col_header:
@@ -85,6 +87,9 @@ def show_main_dashboard():
             for match_id, home_team, away_team, match_date, actual_home, actual_away in matches:
                 st.markdown(f"### {home_team} vs {away_team}")
                 st.caption(f"📅 Data: {match_date}")
+
+                if actual_home is not None and actual_away is not None:
+                    st.caption(f"🏁 Placar Oficial: **{home_team} {actual_home} x {actual_away} {away_team}**")
 
                 conn = db.connect()
                 cursor = conn.cursor()
@@ -115,17 +120,66 @@ def show_main_dashboard():
                 st.divider()
 
     with tab_ranking:
-        st.subheader("Current Leaderboard")
+        st.subheader("🏆 Classificação Geral")
 
-        if st.button("🔄 Refresh Leaderboard"):
+        if st.button("🔄 Atualizar Classificação"):
             st.rerun()
 
         df_ranking = eng.generate_ranking()
 
         if df_ranking.empty:
-            st.info("No scores calculated yet.")
+            st.info("Nenhuma pontuação calculada ainda.")
         else:
             st.dataframe(df_ranking, use_container_width=True)
+
+        st.divider()
+
+        st.subheader(f"📊 Seus Palpites e Desempenho ({user_name})")
+
+        df_history = eng.get_user_match_history(user_id)
+
+        if df_history.empty:
+            st.info("Você ainda não enviou palpites.")
+        else:
+            for _, row in df_history.iterrows():
+                home = row['home_team']
+                away = row['away_team']
+                pred_h = int(row['predicted_home_goals'])
+                pred_a = int(row['predicted_away_goals'])
+                pts = int(row['points'])
+                match_date = row['match_date']
+
+                has_real_score = pd.notna(row['home_goals']) and pd.notna(row['away_goals'])
+
+                with st.container(border=True):
+                    col_info, col_pts = st.columns([3, 1])
+                    with col_info:
+                        st.markdown(f"### {home} vs {away}")
+                        st.caption(f"📅 Data: {match_date}")
+                    with col_pts:
+                        if has_real_score:
+                            st.metric("Pontos Ganhos", f"+{pts} pts")
+                        else:
+                            st.caption("⏳ Em breve")
+
+                    if has_real_score:
+                        real_h = int(row['home_goals'])
+                        real_a = int(row['away_goals'])
+
+                        disp_pred_h = f":green[**{pred_h}**]" if pred_h == real_h else f"**{pred_h}**"
+                        disp_pred_a = f":green[**{pred_a}**]" if pred_a == real_a else f"**{pred_a}**"
+
+                        col_pred, col_vs_div, col_real = st.columns([2, 1, 2])
+                        with col_pred:
+                            st.write("**Seu Palpite**")
+                            st.markdown(f"#### {home} {disp_pred_h} x {disp_pred_a} {away}")
+                        with col_vs_div:
+                            st.write(" ")
+                        with col_real:
+                            st.write("**Resultado Oficial**")
+                            st.markdown(f"#### {home} **{real_h}** x **{real_a}** {away}")
+                    else:
+                        st.markdown(f"**Seu Palpite:** {home} **{pred_h}** x **{pred_a}** {away} *(Aguardando resultado oficial)*")
 
 
 if st.session_state["user"] is None:
