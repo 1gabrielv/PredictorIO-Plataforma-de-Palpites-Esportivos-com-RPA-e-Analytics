@@ -85,12 +85,6 @@ def show_main_dashboard():
             st.info("Nenhuma partida encontrada. Clique no botão acima para carregar os jogos da FIFA.")
         else:
             for match_id, home_team, away_team, match_date, actual_home, actual_away in matches:
-                st.markdown(f"### {home_team} vs {away_team}")
-                st.caption(f"📅 Data: {match_date}")
-
-                if actual_home is not None and actual_away is not None:
-                    st.caption(f"🏁 Placar Oficial: **{home_team} {actual_home} x {actual_away} {away_team}**")
-
                 conn = db.connect()
                 cursor = conn.cursor()
                 cursor.execute("""
@@ -101,21 +95,45 @@ def show_main_dashboard():
                 existing_prediction = cursor.fetchone()
                 conn.close()
 
-                default_home = existing_prediction[0] if existing_prediction else 0
-                default_away = existing_prediction[1] if existing_prediction else 0
+                user_already_predicted = existing_prediction is not None
+
+                st.markdown(f"### {home_team} vs {away_team}")
+                st.caption(f"📅 Data: {match_date}")
+
+                if user_already_predicted:
+                    st.caption("🔒 **Palpite registrado!** (Alterações bloqueadas para este usuário)")
+
+                default_home = existing_prediction[0] if user_already_predicted else 0
+                default_away = existing_prediction[1] if user_already_predicted else 0
 
                 col_home, col_vs, col_away, col_btn = st.columns([2, 1, 2, 2])
                 with col_home:
-                    pred_home = st.number_input(f"{home_team}", min_value=0, value=default_home, key=f"home_{match_id}")
+                    pred_home = st.number_input(
+                        f"{home_team}", 
+                        min_value=0, 
+                        value=default_home, 
+                        key=f"home_{match_id}",
+                        disabled=user_already_predicted
+                    )
                 with col_vs:
                     st.write("### x")
                 with col_away:
-                    pred_away = st.number_input(f"{away_team}", min_value=0, value=default_away, key=f"away_{match_id}")
+                    pred_away = st.number_input(
+                        f"{away_team}", 
+                        min_value=0, 
+                        value=default_away, 
+                        key=f"away_{match_id}",
+                        disabled=user_already_predicted
+                    )
                 with col_btn:
                     st.write(" ")
-                    if st.button("Salvar Palpite", key=f"btn_{match_id}"):
-                        db.save_prediction(user_id, match_id, int(pred_home), int(pred_away))
-                        st.success("Salvo!")
+                    if not user_already_predicted:
+                        if st.button("Salvar Palpite", key=f"btn_{match_id}"):
+                            db.save_prediction(user_id, match_id, int(pred_home), int(pred_away))
+                            st.success("Palpite confirmado!")
+                            st.rerun()
+                    else:
+                        st.caption("Palpite confirmado")
 
                 st.divider()
 
